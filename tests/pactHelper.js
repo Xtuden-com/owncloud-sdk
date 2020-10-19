@@ -3,12 +3,21 @@ var validUserPasswordHash = btoa(config.username + ':' + config.password)
 const Pact = require('@pact-foundation/pact-web')
 
 const accessControlAllowHeaders = 'OC-Checksum,OC-Total-Length,OCS-APIREQUEST,X-OC-Mtime,Accept,Authorization,Brief,Content-Length,Content-Range,Content-Type,Date,Depth,Destination,Host,If,If-Match,If-Modified-Since,If-None-Match,If-Range,If-Unmodified-Since,Location,Lock-Token,Overwrite,Prefer,Range,Schedule-Reply,Timeout,User-Agent,X-Expected-Entity-Length,Accept-Language,Access-Control-Request-Method,Access-Control-Allow-Origin,ETag,OC-Autorename,OC-CalDav-Import,OC-Chunked,OC-Etag,OC-FileId,OC-LazyOps,OC-Total-File-Length,Origin,X-Request-ID,X-Requested-With'
-const accessControlAllowMethods = 'GET,OPTIONS,POST,PUT,DELETE,MKCOL,PROPFIND,PATCH,PROPPATCH,REPORT,COPY,MOVE,HEAD,LOCK,UNLOCK'
+const accessControlAllowMethods = 'GET,OPTIONS,POST,PUT,DELETE,MKCOL,PROPFIND,PATCH,PROPPATCH,REPORT,HEAD,COPY,MOVE,LOCK,UNLOCK'
 const origin = 'http://localhost:9876'
 const validAuthHeaders = {
   authorization: 'Basic ' + validUserPasswordHash,
   Origin: origin
 }
+
+const testSubFiles = [
+  config.testFolder + '/' + 'file%20one.txt',
+  config.testFolder + '/' + 'zz%2Bz.txt',
+  config.testFolder + '/' + '中文.txt',
+  config.testFolder + '/' + 'abc.txt',
+  config.testFolder + '/' + 'subdir/in%20dir.txt',
+  config.testFolder + '/' + '%E4%B8%AD%E6%96%87.txt'
+]
 
 const ocsMeta = function (status, statusCode, Message = null) {
   if (Message == null) {
@@ -81,7 +90,7 @@ function setGeneralInteractions (provider) {
       }),
       headers: {
         'Access-Control-Request-Method': Pact.Matchers.regex({
-          matcher: 'GET|POST|PUT|DELETE|MKCOL|PROPFIND|MOVE|COPY',
+          matcher: 'GET|POST|PUT|DELETE|MKCOL|PROPFIND|MOVE|COPY|REPORT',
           generate: 'GET'
         })
       }
@@ -384,28 +393,6 @@ function setGeneralInteractions (provider) {
   }))
 
   promises.push(provider.addInteraction({
-    uponReceiving: 'Put file contents',
-    withRequest: {
-      method: 'PUT',
-      path: Pact.Matchers.regex({
-        matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFile,
-        generate: '/remote.php/webdav/' + config.testFile
-      }),
-      headers: validAuthHeaders,
-      body: config.testContent
-    },
-    willRespondWith: {
-      status: 200,
-      headers: {
-        'Access-Control-Request-Method': Pact.Matchers.regex({
-          matcher: 'GET|POST|PUT|DELETE',
-          generate: 'GET'
-        }),
-        'Access-Control-Allow-Origin': origin
-      }
-    }
-  }))
-  promises.push(provider.addInteraction({
     uponReceiving: 'successfully create a folder',
     withRequest: {
       method: 'MKCOL',
@@ -420,84 +407,215 @@ function setGeneralInteractions (provider) {
       status: 201,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Access-Control-Allow-Origin': origin
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
       }
     }
   }))
-  promises.push(provider.addInteraction({
-    uponReceiving: 'creating a folder in a not existing root',
-    withRequest: {
-      method: 'MKCOL',
-      path: Pact.Matchers.term({
-        matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFolder + '\\/' + config.nonExistentDir + '\\/.*\\/',
-        generate: '/remote.php/webdav/' + config.testFolder + '/' + config.nonExistentDir + '/newFolder/'
-      }),
-      headers: validAuthHeaders
-    },
-    willRespondWith: {
-      status: 409,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Access-Control-Allow-Origin': origin
+  // I think this is not needed
+  // promises.push(provider.addInteraction({
+  //   uponReceiving: 'list content of a folder',
+  //   withRequest: {
+  //     method: 'PROPFIND',
+  //     path: Pact.Matchers.term({
+  //       matcher: '.*\\/remote\\.php\\/webdav\\/.*\\/',
+  //       generate: '/remote.php/webdav/' + config.testFolder + '/'
+  //     }),
+  //     headers: validAuthHeaders
+  //   },
+  //   willRespondWith: {
+  //     status: 207,
+  //     headers: applicationXmlResponseHeaders,
+  //     body:
+  //       '<?xml version="1.0"?> ' +
+  //       ' <d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns"> ' +
+  //       ' <d:response> ' +
+  //       ' <d:href>/owncloud-core/remote.php/webdav/' + config.testFolder + '/new%20folder/</d:href> ' +
+  //       ' <d:propstat> ' +
+  //       ' <d:prop> ' +
+  //       ' <d:getlastmodified>Tue, 22 Sep 2020 09:27:57 GMT</d:getlastmodified> ' +
+  //       ' <d:resourcetype> ' +
+  //       ' <d:collection/> ' +
+  //       ' </d:resourcetype> ' +
+  //       ' <d:quota-used-bytes>0</d:quota-used-bytes> ' +
+  //       ' <d:quota-available-bytes>-3</d:quota-available-bytes> ' +
+  //       ' <d:getetag>&quot;5f69c39d0f947&quot;</d:getetag> ' +
+  //       ' </d:prop> ' +
+  //       ' <d:status>HTTP/1.1 200 OK</d:status> ' +
+  //       ' </d:propstat> ' +
+  //       ' </d:response> ' +
+  //       ' </d:multistatus>'
+  //   }
+  // }))
+
+  const filesArray = [...testSubFiles, config.testFile, config.testFolder + '/' + config.testFile, config.nonExistentFile]
+  for (let i = 0; i < filesArray.length; i++) {
+    console.log(i)
+    promises.push(provider.addInteraction({
+      uponReceiving: 'GET file contents',
+      withRequest: {
+        method: 'GET',
+        path: Pact.Matchers.regex({
+          matcher: `.*\\/remote\\.php\\/webdav\\/${filesArray[i]}`,
+          generate: `/remote.php/webdav/${filesArray[i]}`
+        }),
+        headers: validAuthHeaders
       },
-      body: '<?xml version="1.0" encoding="utf-8"?>\n' +
-        '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
-        '  <s:exception>Sabre\\DAV\\Exception\\Conflict</s:exception>\n' +
-        '  <s:message>Parent node does not exist</s:message>\n' +
-        '</d:error>\n'
-    }
-  }))
-  promises.push(provider.addInteraction({
-    uponReceiving: 'list content of a folder',
-    withRequest: {
-      method: 'PROPFIND',
-      path: Pact.Matchers.term({
-        matcher: '.*\\/remote\\.php\\/webdav\\/.*\\/',
-        generate: '/remote.php/webdav/' + config.testFolder + '/'
-      }),
-      headers: validAuthHeaders
-    },
-    willRespondWith: {
-      status: 207,
-      headers: applicationXmlResponseHeaders,
-      body:
-        '<?xml version="1.0"?> ' +
-        ' <d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns"> ' +
-        ' <d:response> ' +
-        ' <d:href>/owncloud-core/remote.php/webdav/' + config.testFolder + '/new%20folder/</d:href> ' +
-        ' <d:propstat> ' +
-        ' <d:prop> ' +
-        ' <d:getlastmodified>Tue, 22 Sep 2020 09:27:57 GMT</d:getlastmodified> ' +
-        ' <d:resourcetype> ' +
-        ' <d:collection/> ' +
-        ' </d:resourcetype> ' +
-        ' <d:quota-used-bytes>0</d:quota-used-bytes> ' +
-        ' <d:quota-available-bytes>-3</d:quota-available-bytes> ' +
-        ' <d:getetag>&quot;5f69c39d0f947&quot;</d:getetag> ' +
-        ' </d:prop> ' +
-        ' <d:status>HTTP/1.1 200 OK</d:status> ' +
-        ' </d:propstat> ' +
-        ' </d:response> ' +
-        ' </d:multistatus>'
-    }
-  }))
-  promises.push(provider.addInteraction({
-    uponReceiving: 'successfully delete a file or folder',
-    withRequest: {
-      method: 'DELETE',
-      path: Pact.Matchers.term({
-        matcher: '.*\\/remote\\.php\\/webdav\\/.*\\/',
-        generate: '/remote.php/webdav/' + config.testFolder + '/' + config.testFile
-      }),
-      headers: validAuthHeaders
-    },
-    willRespondWith: {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': origin
+      willRespondWith: filesArray[i] !== config.nonExistentFile ? {
+        status: 200,
+        headers: {
+          ...applicationXmlResponseHeaders,
+          'Access-Control-Allow-Headers': accessControlAllowHeaders,
+          'Access-Control-Allow-Methods': accessControlAllowMethods
+        },
+        body: config.testContent
+      } : {
+        status: 404,
+        headers: {
+          ...applicationXmlResponseHeaders,
+          'Access-Control-Allow-Headers': accessControlAllowHeaders,
+          'Access-Control-Allow-Methods': accessControlAllowMethods
+        },
+        body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+          '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+          '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+          '  <s:message>File with name nonExistentFile could not be located</s:message>\n' +
+          '</d:error>'
       }
-    }
-  }))
+    }))
+  }
+
+  let favoriteValues = [true, false]
+  for (const value of favoriteValues) {
+    promises.push(provider.addInteraction({
+      uponReceiving: 'Favorite a file',
+      withRequest: {
+        method: 'PROPPATCH',
+        path: Pact.Matchers.regex({
+          matcher: `.*\\/remote\\.php\\/webdav\\/${config.testFile}`,
+          generate: `/remote.php/webdav/${config.testFile}`
+        }),
+        headers: validAuthHeaders,
+        body: '<?xml version="1.0"?>\n' +
+          '<d:propertyupdate  xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">\n' +
+          '  <d:set>\n' +
+          '   <d:prop>\n' +
+          `      <oc:favorite>${value}</oc:favorite>\n` +
+          '    </d:prop>\n' +
+          '  </d:set>\n' +
+          '</d:propertyupdate>'
+      },
+      willRespondWith: {
+        status: 207,
+        headers: {
+          ...applicationXmlResponseHeaders,
+          'Access-Control-Allow-Headers': accessControlAllowHeaders,
+          'Access-Control-Allow-Methods': accessControlAllowMethods
+        },
+        body: '<?xml version="1.0"?>\n' +
+          '<d:multistatus\n' +
+          '    xmlns:d="DAV:"\n' +
+          '    xmlns:s="http://sabredav.org/ns"\n' +
+          '    xmlns:oc="http://owncloud.org/ns">\n' +
+          '    <d:response>\n' +
+          '        <d:href>/core/remote.php/webdav/testFile.txt</d:href>\n' +
+          '        <d:propstat>\n' +
+          '            <d:prop>\n' +
+          '                <oc:favorite/>\n' +
+          '            </d:prop>\n' +
+          '            <d:status>HTTP/1.1 200 OK</d:status>\n' +
+          '        </d:propstat>\n' +
+          '    </d:response>\n' +
+          '</d:multistatus>'
+      }
+    }))
+  }
+
+  favoriteValues = [1]
+  for (const value of favoriteValues) {
+    promises.push(provider.addInteraction({
+      uponReceiving: 'propfind file info, favorite',
+      withRequest: {
+        method: 'PROPFIND',
+        path: Pact.Matchers.term({
+          matcher: `.*\\/remote\\.php\\/webdav\\/${config.testFile}`,
+          generate: `/remote.php/webdav/${config.testFile}`
+        }),
+        headers: validAuthHeaders,
+        body: '<?xml version="1.0"?>\n' +
+          '<d:propfind  xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">\n' +
+          '  <d:prop>\n' +
+          '    <oc:favorite />\n' +
+          '  </d:prop>\n' +
+          '</d:propfind>'
+      },
+      willRespondWith: {
+        status: 207,
+        headers: {
+          ...applicationXmlResponseHeaders,
+          'Access-Control-Allow-Headers': accessControlAllowHeaders,
+          'Access-Control-Allow-Methods': accessControlAllowMethods
+        },
+        body: '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:s="http://sabredav.org/ns">\n' +
+          '   <d:response>\n' +
+          '      <d:href>/core/remote.php/webdav/testFile.txt</d:href>\n' +
+          '      <d:propstat>\n' +
+          '         <d:prop>\n' +
+          `            <oc:favorite>${value}</oc:favorite>\n` +
+          '         </d:prop>\n' +
+          '         <d:status>HTTP/1.1 200 OK</d:status>\n' +
+          '      </d:propstat>\n' +
+          '   </d:response>\n' +
+          '</d:multistatus>'
+      }
+    }))
+  }
+  // report method is not supported
+  // promises.push(provider.addInteraction({
+  //   uponReceiving: 'get favorite file',
+  //   withRequest: {
+  //     method: 'REPORT',
+  //     path: Pact.Matchers.regex({
+  //       matcher: '.*\\/remote\\.php\\/dav\\/files\\/admin\\/$',
+  //       generate: '/remote.php/dav/files/admin/'
+  //     }),
+  //     headers: validAuthHeaders,
+  //     body: '<?xml version="1.0"?>\n' +
+  //       '<oc:filter-files  xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">\n' +
+  //       '  <d:prop>\n' +
+  //       '    <oc:favorite />\n' +
+  //       '  </d:prop>\n' +
+  //       '<oc:filter-rules>\n' +
+  //       '<oc:favorite>1</oc:favorite>\n' +
+  //       '</oc:filter-rules>\n' +
+  //       '</oc:filter-files>'
+  //   },
+  //   willRespondWith: {
+  //     status: 207,
+  //     headers: {
+  //       ...applicationXmlResponseHeaders,
+  //       'Access-Control-Allow-Headers': accessControlAllowHeaders,
+  //       'Access-Control-Allow-Methods': accessControlAllowMethods
+  //     },
+  //     body: '<?xml version="1.0"?>\n' +
+  //       '<d:multistatus\n' +
+  //       '    xmlns:d="DAV:"\n' +
+  //       '    xmlns:s="http://sabredav.org/ns"\n' +
+  //       '    xmlns:oc="http://owncloud.org/ns">\n' +
+  //       '    <d:response>\n' +
+  //       '        <d:href>/remote.php/dav/files/admin/testFile.txt</d:href>\n' +
+  //       '        <d:propstat>\n' +
+  //       '            <d:prop>\n' +
+  //       '                <oc:favorite>1</oc:favorite>\n' +
+  //       '            </d:prop>\n' +
+  //       '            <d:status>HTTP/1.1 200 OK</d:status>\n' +
+  //       '        </d:propstat>\n' +
+  //       '    </d:response>\n' +
+  //       '</d:multistatus>'
+  //   }
+  // }))
 
   let files = ['test.txt', '%E6%96%87%E4%BB%B6.txt', 'test%20space%20and%20%2B%20and%20%23.txt', 'newFileCreated123']
   for (const file of files) {
@@ -523,7 +641,12 @@ function setGeneralInteractions (provider) {
     }))
   }
 
-  files = ['test.txt', '%E6%96%87%E4%BB%B6.txt', 'test%20space%20and%20%2B%20and%20%23.txt', config.testFolder + '/' + config.testFile]
+  files = [
+    'test.txt', '%E6%96%87%E4%BB%B6.txt', 'test%20space%20and%20%2B%20and%20%23.txt',
+    config.testFile, config.testFolder + '/' + config.testFile,
+    ...testSubFiles, config.testFolder + '/fileToTag.txt',
+    config.nonExistentDir + '/file.txt'
+  ]
   for (const file of files) {
     promises.push(provider.addInteraction({
       uponReceiving: 'Put file contents to file ' + file,
@@ -536,7 +659,17 @@ function setGeneralInteractions (provider) {
         headers: validAuthHeaders,
         body: config.testContent
       },
-      willRespondWith: {
+      willRespondWith: file.includes('nonExistent') ? {
+        status: 404,
+        headers: {
+          'Access-Control-Allow-Origin': origin
+        },
+        body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+          '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+          '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+          '  <s:message>File with name nonExistentDir could not be located</s:message>\n' +
+          '</d:error>'
+      } : {
         status: 200,
         headers: {
           'Access-Control-Allow-Origin': origin
@@ -546,22 +679,180 @@ function setGeneralInteractions (provider) {
   }
 
   promises.push(provider.addInteraction({
-    uponReceiving: 'a request to delete a folder',
+    uponReceiving: 'copy existent file into same folder, different name',
     withRequest: {
-      method: 'DELETE',
+      method: 'COPY',
       path: Pact.Matchers.term({
-        matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFolder + '$',
-        generate: '/remote.php/webdav/' + config.testFolder
+        matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFolder + '/%E4%B8%AD%E6%96%87.txt$',
+        generate: '/remote.php/webdav/' + config.testFolder + '/%E4%B8%AD%E6%96%87.txt'
       }),
-      headers: validAuthHeaders
+      headers: {
+        ...validAuthHeaders,
+        Destination: `${config.owncloudURL}remote.php/webdav/testFolder/%E4%B8%AD%E6%96%87123.txt`
+      }
     },
     willRespondWith: {
-      status: 204,
+      status: 201,
       headers: {
-        'Access-Control-Allow-Origin': origin
+        ...applicationXmlResponseHeaders,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
       }
     }
   }))
+
+  promises.push(provider.addInteraction({
+    uponReceiving: 'copy existent file into different folder',
+    withRequest: {
+      method: 'COPY',
+      path: Pact.Matchers.term({
+        matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFolder + '/%E4%B8%AD%E6%96%87123.txt$',
+        generate: '/remote.php/webdav/' + config.testFolder + '/%E4%B8%AD%E6%96%87123.txt'
+      }),
+      headers: {
+        ...validAuthHeaders,
+        Destination: `${config.owncloudURL}remote.php/webdav/testFolder/subdir/%E4%B8%AD%E6%96%87.txt`
+      }
+    },
+    willRespondWith: {
+      status: 201,
+      headers: {
+        ...applicationXmlResponseHeaders,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
+      }
+    }
+  }))
+
+  // promises.push(provider.addInteraction({
+  //   uponReceiving: 'searches in the instance',
+  //   withRequest: {
+  //     method: 'REPORT',
+  //     path: Pact.Matchers.term({
+  //       matcher: '.*\\/remote\\.php\\/dav\\/files\\/admin\\/$',
+  //       generate: '/remote.php/dav/files/admin/'
+  //     }),
+  //     headers: validAuthHeaders,
+  //     body: '<?xml version="1.0"?>\n' +
+  //       '<oc:search-files  xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">\n' +
+  //       '  <d:prop>\n' +
+  //       '    <oc:favorite />\n' +
+  //       '    <d:getcontentlength />\n' +
+  //       '    <oc:size />\n' +
+  //       '    <d:getlastmodified />\n' +
+  //       '    <d:resourcetype />\n' +
+  //       '  </d:prop>\n' +
+  //       '  <oc:search>\n' +
+  //       '    <oc:pattern>abc</oc:pattern>\n' +
+  //       '    <oc:limit>30</oc:limit>\n' +
+  //       '  </oc:search>\n' +
+  //       '</oc:search-files>'
+  //   },
+  //   willRespondWith: {
+  //     status: 207,
+  //     headers: {
+  //       ...applicationXmlResponseHeaders,
+  //       'Access-Control-Allow-Headers': accessControlAllowHeaders,
+  //       'Access-Control-Allow-Methods': accessControlAllowMethods
+  //     },
+  //     body: '<?xml version="1.0"?>\n' +
+  //       '<d:multistatus\n' +
+  //       '    xmlns:d="DAV:"\n' +
+  //       '    xmlns:s="http://sabredav.org/ns"\n' +
+  //       '    xmlns:oc="http://owncloud.org/ns">\n' +
+  //       '    <d:response>\n' +
+  //       '        <d:href>/core/remote.php/dav/files/admin/testFolder/abc.txt</d:href>\n' +
+  //       '        <d:propstat>\n' +
+  //       '            <d:prop>\n' +
+  //       '                <oc:favorite>0</oc:favorite>\n' +
+  //       '                <d:getcontentlength>6</d:getcontentlength>\n' +
+  //       '                <oc:size>6</oc:size>\n' +
+  //       '                <d:getlastmodified>Wed, 21 Oct 2020 11:20:54 GMT</d:getlastmodified>\n' +
+  //       '                <d:resourcetype/>\n' +
+  //       '            </d:prop>\n' +
+  //       '            <d:status>HTTP/1.1 200 OK</d:status>\n' +
+  //       '        </d:propstat>\n' +
+  //       '    </d:response>\n' +
+  //       '</d:multistatus>'
+  //   }
+  // }))
+
+  promises.push(provider.addInteraction({
+    uponReceiving: 'create Tag',
+    withRequest: {
+      method: 'POST',
+      path: Pact.Matchers.term({
+        matcher: '.*\\/remote\\.php\\/dav\\/systemtags',
+        generate: '/remote.php/dav/systemtags'
+      }),
+      headers: {
+        ...validAuthHeaders,
+        'Content-Type': 'application/json'
+      },
+      body: { canAssign: true, name: 'testSystemTag', userAssignable: true, userEditable: true, userVisible: true }
+    },
+    willRespondWith: {
+      status: 201,
+      headers: {
+        ...applicationXmlResponseHeaders,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
+      }
+    }
+  }))
+
+  // promises.push(provider.addInteraction({
+  //   uponReceiving: 'tag file',
+  //   withRequest: {
+  //     method: 'PUT',
+  //     path: Pact.Matchers.term({
+  //       matcher: '.*\\/remote\\.php\\/dav\\/systemtags-relations\\/files\\/fileId/tagId',
+  //       generate: '/remote.php/dav/systemtags-relations/files/2147563835/4'
+  //     }),
+  //     headers: validAuthHeaders
+  //   },
+  //   willRespondWith: {
+  //     status: 201,
+  //     headers: {
+  //       ...applicationXmlResponseHeaders,
+  //       'Access-Control-Allow-Headers': accessControlAllowHeaders,
+  //       'Access-Control-Allow-Methods': accessControlAllowMethods
+  //     }
+  //   }
+  // }))
+
+  const resources = [config.testFolder, config.testFolder + '/' + 'new%20folder', config.testFolder + '/' + config.testFile, config.nonExistentDir]
+  for (const folder of resources) {
+    promises.push(provider.addInteraction({
+      uponReceiving: 'a request to delete a folder',
+      withRequest: {
+        method: 'DELETE',
+        path: Pact.Matchers.term({
+          matcher: '.*\\/remote\\.php\\/webdav\\/' + folder + '$',
+          generate: '/remote.php/webdav/' + folder
+        }),
+        headers: validAuthHeaders
+      },
+      willRespondWith: folder.includes('nonExistent') ? {
+        status: 404,
+        headers: {
+          ...applicationXmlResponseHeaders,
+          'Access-Control-Allow-Headers': accessControlAllowHeaders,
+          'Access-Control-Allow-Methods': accessControlAllowMethods
+        },
+        body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+          '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+          '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+          '  <s:message>File with name nonExistentDir could not be located</s:message>\n' +
+          '</d:error>'
+      } : {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': origin
+        }
+      }
+    }))
+  }
   return promises
 }
 
