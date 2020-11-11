@@ -23,7 +23,7 @@ fdescribe('Main: Currently testing file versions management,', function () {
     versions: [
       {
         versionId: 98765432,
-        content: '**'
+        content: config.testContent
       },
       {
         versionId: 87654321,
@@ -197,23 +197,6 @@ fdescribe('Main: Currently testing file versions management,', function () {
         willRespondWith: {
           status: 204,
           headers: header
-        }
-      }))
-
-      promises.push(provider.addInteraction({
-        uponReceiving: 'GET file contents',
-        withRequest: {
-          method: 'GET',
-          path: Pact.Matchers.regex({
-            matcher: `.*\\/remote\\.php\\/webdav\\/${versionedFile}`,
-            generate: `/remote.php/webdav/${versionedFile}`
-          }),
-          headers: validAuthHeaders
-        },
-        willRespondWith: {
-          status: 200,
-          headers: header,
-          body: fileInfo.versions[0].content
         }
       }))
 
