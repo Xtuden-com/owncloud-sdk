@@ -77,6 +77,80 @@ const unauthorizedXmlResponseBody = '<?xml version="1.0"?>\n' +
   ' <data/>\n' +
   '</ocs>'
 
+const webdavMatcherForResource = resource => {
+  if (resource.includes('/')) {
+    return resource.replace('/', '\\/') + '$'
+  } else {
+    return resource
+  }
+}
+const getContentsOfFile = file => {
+  return {
+    uponReceiving: 'GET contents of file ' + file,
+    withRequest: {
+      method: 'GET',
+      path: Pact.Matchers.regex({
+        matcher: '.*\\/remote\\.php\\/webdav\\/' + webdavMatcherForResource(file),
+        generate: `/remote.php/webdav/${file}`
+      }),
+      headers: validAuthHeaders
+    },
+    willRespondWith: file !== config.nonExistentFile ? {
+      status: 200,
+      headers: {
+        ...applicationXmlResponseHeaders,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
+      },
+      body: config.testContent
+    } : {
+      status: 404,
+      headers: {
+        ...applicationXmlResponseHeaders,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
+      },
+      body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+        '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+        '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+        `  <s:message>File with name ${config.nonExistentFile} could not be located</s:message>\n` +
+        '</d:error>'
+    }
+  }
+}
+
+const deleteResource = resource => {
+  return {
+    uponReceiving: 'a request to delete a folder, ' + resource,
+    withRequest: {
+      method: 'DELETE',
+      path: Pact.Matchers.term({
+        matcher: '.*\\/remote\\.php\\/webdav\\/' + webdavMatcherForResource(resource),
+        generate: '/remote.php/webdav/' + resource
+      }),
+      headers: validAuthHeaders
+    },
+    willRespondWith: resource.includes('nonExistent') ? {
+      status: 404,
+      headers: {
+        ...applicationXmlResponseHeaders,
+        'Access-Control-Allow-Headers': accessControlAllowHeaders,
+        'Access-Control-Allow-Methods': accessControlAllowMethods
+      },
+      body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+        '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+        '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+        '  <s:message>File with name nonExistentDir could not be located</s:message>\n' +
+        '</d:error>'
+    } : {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': origin
+      }
+    }
+  }
+}
+
 function setGeneralInteractions (provider) {
   const promises = []
 
@@ -414,41 +488,41 @@ function setGeneralInteractions (provider) {
     }
   }))
 
-  const filesArray = [...testSubFiles, config.testFile, config.testFolder + '/' + config.testFile, config.nonExistentFile]
-  for (let i = 0; i < filesArray.length; i++) {
-    promises.push(provider.addInteraction({
-      uponReceiving: 'GET file contents',
-      withRequest: {
-        method: 'GET',
-        path: Pact.Matchers.regex({
-          matcher: `.*\\/remote\\.php\\/webdav\\/${filesArray[i]}`,
-          generate: `/remote.php/webdav/${filesArray[i]}`
-        }),
-        headers: validAuthHeaders
-      },
-      willRespondWith: filesArray[i] !== config.nonExistentFile ? {
-        status: 200,
-        headers: {
-          ...applicationXmlResponseHeaders,
-          'Access-Control-Allow-Headers': accessControlAllowHeaders,
-          'Access-Control-Allow-Methods': accessControlAllowMethods
-        },
-        body: config.testContent
-      } : {
-        status: 404,
-        headers: {
-          ...applicationXmlResponseHeaders,
-          'Access-Control-Allow-Headers': accessControlAllowHeaders,
-          'Access-Control-Allow-Methods': accessControlAllowMethods
-        },
-        body: '<?xml version="1.0" encoding="utf-8"?>\n' +
-          '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
-          '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
-          '  <s:message>File with name nonExistentFile could not be located</s:message>\n' +
-          '</d:error>'
-      }
-    }))
-  }
+  // const filesArray = [...testSubFiles, config.testFile, config.testFolder + '/' + config.testFile, config.nonExistentFile]
+  // for (const file of filesArray) {
+  //   promises.push(provider.addInteraction({
+  //     uponReceiving: 'GET file contents',
+  //     withRequest: {
+  //       method: 'GET',
+  //       path: Pact.Matchers.regex({
+  //         matcher: '.*\\/remote\\.php\\/webdav\\/' + file.includes('/') ? file.replace(/, \\/) : file + '$',
+  //         generate: `/remote.php/webdav/${file}`
+  //       }),
+  //       headers: validAuthHeaders
+  //     },
+  //     willRespondWith: file !== config.nonExistentFile ? {
+  //       status: 200,
+  //       headers: {
+  //         ...applicationXmlResponseHeaders,
+  //         'Access-Control-Allow-Headers': accessControlAllowHeaders,
+  //         'Access-Control-Allow-Methods': accessControlAllowMethods
+  //       },
+  //       body: config.testContent
+  //     } : {
+  //       status: 404,
+  //       headers: {
+  //         ...applicationXmlResponseHeaders,
+  //         'Access-Control-Allow-Headers': accessControlAllowHeaders,
+  //         'Access-Control-Allow-Methods': accessControlAllowMethods
+  //       },
+  //       body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+  //         '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+  //         '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+  //         '  <s:message>File with name nonExistentFile could not be located</s:message>\n' +
+  //         '</d:error>'
+  //     }
+  //   }))
+  // }
 
   let files = ['test.txt', '%E6%96%87%E4%BB%B6.txt', 'test%20space%20and%20%2B%20and%20%23.txt', 'newFileCreated123', config.testFile]
   for (const file of files) {
@@ -486,7 +560,7 @@ function setGeneralInteractions (provider) {
       withRequest: {
         method: 'PUT',
         path: Pact.Matchers.regex({
-          matcher: '.*\\/remote\\.php\\/webdav\\/' + file,
+          matcher: '.*\\/remote\\.php\\/webdav\\/' + webdavMatcherForResource(file),
           generate: '/remote.php/webdav/' + file
         }),
         headers: validAuthHeaders,
@@ -511,43 +585,45 @@ function setGeneralInteractions (provider) {
     }))
   }
 
-  const resources = [config.testFolder, config.testFolder + '/' + 'new%20folder', config.testFolder + '/' + config.testFile, config.nonExistentDir]
-  for (const folder of resources) {
-    promises.push(provider.addInteraction({
-      uponReceiving: 'a request to delete a folder',
-      withRequest: {
-        method: 'DELETE',
-        path: Pact.Matchers.term({
-          matcher: '.*\\/remote\\.php\\/webdav\\/' + folder + '$',
-          generate: '/remote.php/webdav/' + folder
-        }),
-        headers: validAuthHeaders
-      },
-      willRespondWith: folder.includes('nonExistent') ? {
-        status: 404,
-        headers: {
-          ...applicationXmlResponseHeaders,
-          'Access-Control-Allow-Headers': accessControlAllowHeaders,
-          'Access-Control-Allow-Methods': accessControlAllowMethods
-        },
-        body: '<?xml version="1.0" encoding="utf-8"?>\n' +
-          '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
-          '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
-          '  <s:message>File with name nonExistentDir could not be located</s:message>\n' +
-          '</d:error>'
-      } : {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': origin
-        }
-      }
-    }))
-  }
+  // const resources = [config.testFolder, config.testFolder + '/' + 'new%20folder', config.testFolder + '/' + config.testFile, config.nonExistentDir]
+  // for (const folder of resources) {
+  //   promises.push(provider.addInteraction({
+  //     uponReceiving: 'a request to delete a folder, ' + folder,
+  //     withRequest: {
+  //       method: 'DELETE',
+  //       path: Pact.Matchers.term({
+  //         matcher: '.*\\/remote\\.php\\/webdav\\/' + webdavMatcherForResource(folder),
+  //         generate: '/remote.php/webdav/' + folder
+  //       }),
+  //       headers: validAuthHeaders
+  //     },
+  //     willRespondWith: folder.includes('nonExistent') ? {
+  //       status: 404,
+  //       headers: {
+  //         ...applicationXmlResponseHeaders,
+  //         'Access-Control-Allow-Headers': accessControlAllowHeaders,
+  //         'Access-Control-Allow-Methods': accessControlAllowMethods
+  //       },
+  //       body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+  //         '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+  //         '  <s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception>\n' +
+  //         '  <s:message>File with name nonExistentDir could not be located</s:message>\n' +
+  //         '</d:error>'
+  //     } : {
+  //       status: 204,
+  //       headers: {
+  //         'Access-Control-Allow-Origin': origin
+  //       }
+  //     }
+  //   }))
+  // }
   return promises
 }
 
 module.exports = {
   setGeneralInteractions,
+  getContentsOfFile,
+  deleteResource,
   ocsMeta,
   shareResponseOcsData,
   origin,

@@ -10,7 +10,7 @@ fdescribe('Main: Currently testing files management,', function () {
   // PACT setup
   const Pact = require('@pact-foundation/pact-web')
   const provider = new Pact.PactWeb()
-  const { setGeneralInteractions, validAuthHeaders, applicationXmlResponseHeaders, accessControlAllowHeaders, accessControlAllowMethods } = require('./pactHelper.js')
+  const { setGeneralInteractions, getContentsOfFile, deleteResource, validAuthHeaders, applicationXmlResponseHeaders, accessControlAllowHeaders, accessControlAllowMethods } = require('./pactHelper.js')
 
   // TESTING CONFIGS
   const testContent = config.testContent
@@ -141,138 +141,71 @@ fdescribe('Main: Currently testing files management,', function () {
     return response
   }
 
-  beforeAll(function (done) {
-    const promises = []
-    promises.push(setGeneralInteractions(provider))
-    promises.push(provider.addInteraction({
-      uponReceiving: 'list content of new folder',
-      withRequest: {
-        method: 'PROPFIND',
-        path: Pact.Matchers.term({
-          matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFolder + '\\/new%20folder$',
-          generate: '/remote.php/webdav/testFolder/new%20folder'
-        }),
-        headers: {
-          ...validAuthHeaders,
-          Depth: '0'
-        },
-        body: '<?xml version="1.0"?>\n' +
-          '<d:propfind  xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">\n' +
-          '  <d:prop>\n' +
-          '  </d:prop>\n' +
-          '</d:propfind>'
-      },
-      willRespondWith: {
-        status: 207,
-        headers: {
-          ...applicationXmlResponseHeaders,
-          'Access-Control-Allow-Headers': accessControlAllowHeaders,
-          'Access-Control-Allow-Methods': accessControlAllowMethods
-        },
-        body: '<?xml version="1.0"?>\n' +
-          '<d:multistatus\n' +
-          '    xmlns:d="DAV:"\n' +
-          '    xmlns:s="http://sabredav.org/ns"\n' +
-          '    xmlns:oc="http://owncloud.org/ns">\n' +
-          '    <d:response>\n' +
-          '        <d:href>/core/remote.php/webdav/testFolder/new%20folder</d:href>\n' +
-          '        <d:propstat>\n' +
-          '            <d:prop>\n' +
-          '                <d:getlastmodified>Fri, 23 Oct 2020 07:40:26 GMT</d:getlastmodified>\n' +
-          '                <d:resourcetype>\n' +
-          '                    <d:collection/>\n' +
-          '                </d:resourcetype>\n' +
-          '                <d:quota-used-bytes>0</d:quota-used-bytes>\n' +
-          '                <d:quota-available-bytes>-3</d:quota-available-bytes>\n' +
-          '                <d:getetag>&quot;5f9288ea6943b&quot;</d:getetag>\n' +
-          '            </d:prop>\n' +
-          '            <d:status>HTTP/1.1 200 OK</d:status>\n' +
-          '        </d:propstat>\n' +
-          '    </d:response>\n' +
-          '</d:multistatus>'
-      }
-    }))
-
-    // const depths = ['infinity', '2']
-    // for (const depth of depths) {
-    //   promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('test folder', depth)))
-    // }
-
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
-    //   'test folder, with no depth specified',
-    //   'test folder',
-    //   [
-    //     `${config.testFolder}/abc.txt`,
-    //     `${config.testFolder}/file one.txt`,
-    //     `${config.testFolder}/subdir`,
-    //     `${config.testFolder}/zz+z.txt`,
-    //     `${config.testFolder}/中文.txt`
-    //   ], '1')))
-    //
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
-    //   'test folder, with infinity depth',
-    //   'test folder',
-    //   [
-    //     `${config.testFolder}/abc.txt`,
-    //     `${config.testFolder}/file one.txt`,
-    //     `${config.testFolder}/subdir`,
-    //     `${config.testFolder}/subdir/in dir.txt`,
-    //     `${config.testFolder}/zz+z.txt`,
-    //     `${config.testFolder}/中文.txt`
-    //   ], 'infinity')))
-    //
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
-    //   'test folder, with 2 depth',
-    //   'test folder',
-    //   [
-    //     `${config.testFolder}/abc.txt`,
-    //     `${config.testFolder}/file one.txt`,
-    //     `${config.testFolder}/subdir`,
-    //     `${config.testFolder}/subdir/in dir.txt`,
-    //     `${config.testFolder}/zz+z.txt`,
-    //     `${config.testFolder}/中文.txt`
-    //   ], '2')))
-
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
-    //   'test folder, after moving existent file into same folder, different name',
-    //   'test folder',
-    //   [
-    //     `${config.testFolder}/abc.txt`,
-    //     `${config.testFolder}/file one.txt`,
-    //     `${config.testFolder}/subdir`,
-    //     `${config.testFolder}/zz+z.txt`,
-    //     `${config.testFolder}/中文123.txt`
-    //   ], '1')))
-
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('abcdef', '1', 'testFolder/中文123.txt', 'testFolder/中文.txt')))
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('abcdef', '1', 'testFolder/中文.txt')))
-    // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('abcdef', '1',  'testFolder/中文.txt', 'testFolder/中文123.txt')))
-
-    promises.push(provider.addInteraction(aMoveRequest(
-      'same name',
-      {
-        ...validAuthHeaders,
-        Destination: `${config.owncloudURL}remote.php/webdav/testFolder/%E4%B8%AD%E6%96%87.txt`
-      },
-      {
-        status: 403,
-        headers: {
-          ...applicationXmlResponseHeaders,
-          'Access-Control-Allow-Headers': accessControlAllowHeaders,
-          'Access-Control-Allow-Methods': accessControlAllowMethods
-        },
-        body: '<?xml version="1.0" encoding="utf-8"?>\n' +
-          '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
-          '  <s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception>\n' +
-          '  <s:message>Source and destination uri are identical.</s:message>\n' +
-          '</d:error>'
-      })))
-    Promise.all(promises).then(done, done.fail)
-  })
-
-  afterAll(function (done) {
-    provider.removeInteractions().then(done, done.fail)
-  })
+  // beforeAll(function (done) {
+  //   const promises = []
+  //   promises.push(setGeneralInteractions(provider))
+  //
+  //   // const depths = ['infinity', '2']
+  //   // for (const depth of depths) {
+  //   //   promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('test folder', depth)))
+  //   // }
+  //
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
+  //   //   'test folder, with no depth specified',
+  //   //   'test folder',
+  //   //   [
+  //   //     `${config.testFolder}/abc.txt`,
+  //   //     `${config.testFolder}/file one.txt`,
+  //   //     `${config.testFolder}/subdir`,
+  //   //     `${config.testFolder}/zz+z.txt`,
+  //   //     `${config.testFolder}/中文.txt`
+  //   //   ], '1')))
+  //   //
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
+  //   //   'test folder, with infinity depth',
+  //   //   'test folder',
+  //   //   [
+  //   //     `${config.testFolder}/abc.txt`,
+  //   //     `${config.testFolder}/file one.txt`,
+  //   //     `${config.testFolder}/subdir`,
+  //   //     `${config.testFolder}/subdir/in dir.txt`,
+  //   //     `${config.testFolder}/zz+z.txt`,
+  //   //     `${config.testFolder}/中文.txt`
+  //   //   ], 'infinity')))
+  //   //
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
+  //   //   'test folder, with 2 depth',
+  //   //   'test folder',
+  //   //   [
+  //   //     `${config.testFolder}/abc.txt`,
+  //   //     `${config.testFolder}/file one.txt`,
+  //   //     `${config.testFolder}/subdir`,
+  //   //     `${config.testFolder}/subdir/in dir.txt`,
+  //   //     `${config.testFolder}/zz+z.txt`,
+  //   //     `${config.testFolder}/中文.txt`
+  //   //   ], '2')))
+  //
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
+  //   //   'test folder, after moving existent file into same folder, different name',
+  //   //   'test folder',
+  //   //   [
+  //   //     `${config.testFolder}/abc.txt`,
+  //   //     `${config.testFolder}/file one.txt`,
+  //   //     `${config.testFolder}/subdir`,
+  //   //     `${config.testFolder}/zz+z.txt`,
+  //   //     `${config.testFolder}/中文123.txt`
+  //   //   ], '1')))
+  //
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('abcdef', '1', 'testFolder/中文123.txt', 'testFolder/中文.txt')))
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('abcdef', '1', 'testFolder/中文.txt')))
+  //   // promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder('abcdef', '1',  'testFolder/中文.txt', 'testFolder/中文123.txt')))
+  //
+  //   Promise.all(promises).then(done, done.fail)
+  // })
+  //
+  // afterAll(function (done) {
+  //   provider.removeInteractions().then(done, done.fail)
+  // })
 
   beforeEach(function (done) {
     oc = new OwnCloud({
@@ -299,57 +232,66 @@ fdescribe('Main: Currently testing files management,', function () {
     oc = null
   })
 
-  fit('creates the testFolder at instance', function (done) {
-    oc.files.createFolder(config.testFolder).then(status => {
-      expect(status).toBe(true)
-      done()
-    }).catch(error => {
-      expect(error).toBe(null)
-      done()
+  describe('file/folder creation and deletion', function () {
+    beforeAll(function (done) {
+      Promise.all(setGeneralInteractions(provider)).then(done, done.fail)
     })
-  })
-
-  fit('creates subfolder at instance', function (done) {
-    oc.files.mkdir(testSubDir).then(status => {
-      expect(status).toBe(true)
-      done()
-    }).catch(error => {
-      expect(error).toBe(null)
-      done()
+    afterAll(function (done) {
+      provider.removeInteractions().then(done, done.fail)
     })
-  })
-
-  fit('creates subfiles at instance', function (done) {
-    let count = 0
-
-    for (let i = 0; i < testSubFiles.length; i++) {
-      oc.files.putFileContents(testSubFiles[i], testContent).then(status => {
-        expect(typeof status).toBe('object')
-        count++
-        if (count === testSubFiles.length) {
-          done()
-        }
+    it('creates the testFolder at instance', function (done) {
+      oc.files.createFolder(config.testFolder).then(status => {
+        expect(status).toBe(true)
+        done()
       }).catch(error => {
         expect(error).toBe(null)
         done()
       })
-    }
-  })
+    })
 
-  fit('deletes the test folder at instance', function (done) {
-    oc.files.delete(config.testFolder).then(status => {
-      expect(status).toBe(true)
-      done()
-    }).catch(error => {
-      expect(error).toBe(null)
-      done()
+    it('creates subfolder at instance', function (done) {
+      oc.files.mkdir(testSubDir).then(status => {
+        expect(status).toBe(true)
+        done()
+      }).catch(error => {
+        expect(error).toBe(null)
+        done()
+      })
+    })
+
+    it('creates subfiles at instance', function (done) {
+      let count = 0
+
+      for (let i = 0; i < testSubFiles.length; i++) {
+        oc.files.putFileContents(testSubFiles[i], testContent).then(status => {
+          expect(typeof status).toBe('object')
+          count++
+          if (count === testSubFiles.length) {
+            done()
+          }
+        }).catch(error => {
+          expect(error).toBe(null)
+          done()
+        })
+      }
+    })
+
+    it('deletes the test folder at instance', async function (done) {
+      await provider.addInteraction(deleteResource(config.testFolder))
+      oc.files.delete(config.testFolder).then(status => {
+        expect(status).toBe(true)
+        done()
+      }).catch(error => {
+        expect(error).toBe(null)
+        done()
+      })
     })
   })
 
   describe('abcdefghi', function () {
     beforeAll(async function (done) {
       const promises = []
-      // promises.push(setGeneralInteractions(provider))
+      promises.push(setGeneralInteractions(provider))
       promises.push(provider.addInteraction(aPropfindRequestToListContentOfFolder(
         'test folder, with no depth specified',
         'test folder',
@@ -383,6 +325,54 @@ fdescribe('Main: Currently testing files management,', function () {
           `${config.testFolder}/zz+z.txt`,
           `${config.testFolder}/中文.txt`
         ], '2')))
+      promises.push(provider.addInteraction({
+        uponReceiving: 'list content of new folder',
+        withRequest: {
+          method: 'PROPFIND',
+          path: Pact.Matchers.term({
+            matcher: '.*\\/remote\\.php\\/webdav\\/' + config.testFolder + '\\/new%20folder$',
+            generate: '/remote.php/webdav/testFolder/new%20folder'
+          }),
+          headers: {
+            ...validAuthHeaders,
+            Depth: '0'
+          },
+          body: '<?xml version="1.0"?>\n' +
+            '<d:propfind  xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">\n' +
+            '  <d:prop>\n' +
+            '  </d:prop>\n' +
+            '</d:propfind>'
+        },
+        willRespondWith: {
+          status: 207,
+          headers: {
+            ...applicationXmlResponseHeaders,
+            'Access-Control-Allow-Headers': accessControlAllowHeaders,
+            'Access-Control-Allow-Methods': accessControlAllowMethods
+          },
+          body: '<?xml version="1.0"?>\n' +
+            '<d:multistatus\n' +
+            '    xmlns:d="DAV:"\n' +
+            '    xmlns:s="http://sabredav.org/ns"\n' +
+            '    xmlns:oc="http://owncloud.org/ns">\n' +
+            '    <d:response>\n' +
+            '        <d:href>/core/remote.php/webdav/testFolder/new%20folder</d:href>\n' +
+            '        <d:propstat>\n' +
+            '            <d:prop>\n' +
+            '                <d:getlastmodified>Fri, 23 Oct 2020 07:40:26 GMT</d:getlastmodified>\n' +
+            '                <d:resourcetype>\n' +
+            '                    <d:collection/>\n' +
+            '                </d:resourcetype>\n' +
+            '                <d:quota-used-bytes>0</d:quota-used-bytes>\n' +
+            '                <d:quota-available-bytes>-3</d:quota-available-bytes>\n' +
+            '                <d:getetag>&quot;5f9288ea6943b&quot;</d:getetag>\n' +
+            '            </d:prop>\n' +
+            '            <d:status>HTTP/1.1 200 OK</d:status>\n' +
+            '        </d:propstat>\n' +
+            '    </d:response>\n' +
+            '</d:multistatus>'
+        }
+      }))
 
       Promise.all(promises).then(done, done.fail)
     })
@@ -391,7 +381,7 @@ fdescribe('Main: Currently testing files management,', function () {
       provider.removeInteractions().then(done, done.fail)
     })
 
-    fit('checking method : list with no depth specified', function (done) {
+    it('checking method : list with no depth specified', function (done) {
       oc.files.list(config.testFolder).then(files => {
         expect(typeof (files)).toBe('object')
         expect(files.length).toEqual(6)
@@ -407,7 +397,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : list with Infinity depth', function (done) {
+    it('checking method : list with Infinity depth', function (done) {
       oc.files.list(config.testFolder, 'infinity').then(files => {
         expect(typeof (files)).toBe('object')
         expect(files.length).toEqual(7)
@@ -420,7 +410,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : list with 2 depth', function (done) {
+    it('checking method : list with 2 depth', function (done) {
       oc.files.list(config.testFolder, 2).then(files => {
         expect(typeof (files)).toBe('object')
         expect(files.length).toEqual(7)
@@ -433,7 +423,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : list with non existent file', async function (done) {
+    it('checking method : list with non existent file', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'list content of non existing file',
         withRequest: {
@@ -475,9 +465,20 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : getFileContents for existent files', function (done) {
+    it('checking method : getFileContents for existent files', async function (done) {
       let count = 0
 
+      const subFiles = [
+        `${config.testFolder}/file%20one.txt`,
+        `${config.testFolder}/zz%2Bz.txt`,
+        `${config.testFolder}/中文.txt`,
+        `${config.testFolder}/abc.txt`,
+        `${config.testFolder}/subdir/in%20dir.txt`,
+        `${config.testFolder}/%E4%B8%AD%E6%96%87.txt`
+      ]
+      for (const file of subFiles) {
+        await provider.addInteraction(getContentsOfFile(file))
+      }
       for (let i = 0; i < testSubFiles.length; i++) {
         oc.files.getFileContents(testSubFiles[i], { resolveWithResponseObject: true }).then((resp) => {
           expect(resp.body).toEqual(testContent)
@@ -494,7 +495,8 @@ fdescribe('Main: Currently testing files management,', function () {
     })
 
     // because called from the browser this is not returning xml but html - needs to be adjusted
-    fit('checking method : getFileContents for non existent file', function (done) {
+    it('checking method : getFileContents for non existent file', async function (done) {
+      await provider.addInteraction(getContentsOfFile(nonExistentFile))
       oc.files.getFileContents(nonExistentFile).then(content => {
         expect(content).toBe(null)
         done()
@@ -504,52 +506,53 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    describe('checking method : putFileContents', function () {
-      fit('uploads file for an existing parent path', async function () {
-        const newFile = config.testFolder + '/' + config.testFile
-        let progressCalled = false
+    it('uploads file for an existing parent path', async function () {
+      const newFile = config.testFolder + '/' + config.testFile
+      await provider.addInteraction(getContentsOfFile(newFile))
+      await provider.addInteraction(deleteResource(newFile))
+      let progressCalled = false
 
-        const options = {
-          onProgress: (progressInfo) => {
-            progressCalled = true
-          }
+      const options = {
+        onProgress: (progressInfo) => {
+          progressCalled = true
         }
+      }
 
-        try {
-          let status = await oc.files.putFileContents(newFile, testContent, options)
-          expect(typeof status).toBe('object')
-          expect(progressCalled).toEqual(true)
-          const content = await oc.files.getFileContents(newFile)
-          expect(content).toEqual(testContent)
-          status = await oc.files.delete(newFile)
-          expect(status).toEqual(true)
-        } catch (error) {
-          fail(error)
-        }
-      })
+      try {
+        let status = await oc.files.putFileContents(newFile, testContent, options)
+        expect(typeof status).toBe('object')
+        expect(progressCalled).toEqual(true)
+        const content = await oc.files.getFileContents(newFile)
+        expect(content).toEqual(testContent)
+        status = await oc.files.delete(newFile)
+        expect(status).toEqual(true)
+      } catch (error) {
+        fail(error)
+      }
+    })
 
-      fit('fails with error when uploading to a non-existent parent path', function (done) {
-        oc.files.putFileContents(config.nonExistentDir + '/' + 'file.txt', testContent).then(status => {
-          expect(status).toBe(null)
-          done()
-        }).catch(error => {
-          expect(error.message).toBe('File with name ' + config.nonExistentDir + ' could not be located')
-          done()
-        })
+    it('fails with error when uploading to a non-existent parent path', function (done) {
+      oc.files.putFileContents(config.nonExistentDir + '/' + 'file.txt', testContent).then(status => {
+        expect(status).toBe(null)
+        done()
+      }).catch(error => {
+        expect(error.message).toBe('File with name ' + config.nonExistentDir + ' could not be located')
+        done()
       })
     })
 
-    fit('checking method: getFileUrl', function () {
+    it('checking method: getFileUrl', function () {
       const url = oc.files.getFileUrl('/foo/bar')
       expect(url).toBe(config.owncloudURL + 'remote.php/webdav/foo/bar')
     })
 
-    fit('checking method: getFileUrlV2', function () {
+    it('checking method: getFileUrlV2', function () {
       const url = oc.files.getFileUrlV2('/foo/bar')
       expect(url).toBe(config.owncloudURL + 'remote.php/dav/files/admin/foo/bar')
     })
-    fit('checking method : mkdir for an existing parent path', function (done) {
+    it('checking method : mkdir for an existing parent path', async function (done) {
       const newFolder = config.testFolder + '/' + 'new folder'
+      await provider.addInteraction(deleteResource(encodeURI(newFolder)))
 
       oc.files.mkdir(newFolder).then(status => {
         expect(status).toBe(true)
@@ -568,7 +571,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : mkdir for a non-existent parent path', async function (done) {
+    it('checking method : mkdir for a non-existent parent path', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'creating a folder in a not existing root',
         withRequest: {
@@ -601,7 +604,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : delete for an existing file', async function (done) {
+    it('checking method : delete for an existing file', async function (done) {
       const newFolder = testSubDir
       await provider.addInteraction({
         uponReceiving: 'list content of folder, after the folder has been deleted',
@@ -635,6 +638,7 @@ fdescribe('Main: Currently testing files management,', function () {
             '</d:error>'
         }
       })
+      await provider.addInteraction(deleteResource(encodeURI(newFolder)))
 
       oc.files.mkdir(newFolder).then(status => {
         expect(status).toBe(true)
@@ -656,7 +660,8 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : delete for a non-existent file', function (done) {
+    it('checking method : delete for a non-existent file', async function (done) {
+      await provider.addInteraction(deleteResource(encodeURI(config.nonExistentDir)))
       oc.files.delete(config.nonExistentDir).then(status => {
         expect(status).toBe(null)
         done()
@@ -666,20 +671,37 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    describe('move existent file into same folder, same name', function () {
-      fit('checking method : move existent file into same folder, same name', async function (done) {
-        oc.files.move(config.testFolder + '/中文.txt', config.testFolder + '/中文.txt').then(status => {
-          expect(status).toBe(true)
-          done()
-        }).catch(error => {
-          expect(error.message).toBe('Source and destination uri are identical.')
-          done()
-        })
+    it('checking method : move existent file into same folder, same name', async function (done) {
+      await provider.addInteraction(aMoveRequest(
+        'same name',
+        {
+          ...validAuthHeaders,
+          Destination: `${config.owncloudURL}remote.php/webdav/testFolder/%E4%B8%AD%E6%96%87.txt`
+        },
+        {
+          status: 403,
+          headers: {
+            ...applicationXmlResponseHeaders,
+            'Access-Control-Allow-Headers': accessControlAllowHeaders,
+            'Access-Control-Allow-Methods': accessControlAllowMethods
+          },
+          body: '<?xml version="1.0" encoding="utf-8"?>\n' +
+            '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n' +
+            '  <s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception>\n' +
+            '  <s:message>Source and destination uri are identical.</s:message>\n' +
+            '</d:error>'
+        }))
+      oc.files.move(config.testFolder + '/中文.txt', config.testFolder + '/中文.txt').then(status => {
+        expect(status).toBe(true)
+        done()
+      }).catch(error => {
+        expect(error.message).toBe('Source and destination uri are identical.')
+        done()
       })
     })
 
     // keep together with propfind wiht 1 depth, this and above have matching interaction due to propfind 1
-    fit('checking method : move existent file into different folder', async function (done) {
+    it('checking method : move existent file into different folder', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'move existent file into different folder',
         withRequest: {
@@ -796,7 +818,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : move non existent file', async function (done) {
+    it('checking method : move non existent file', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'move non existent file',
         withRequest: {
@@ -833,7 +855,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : copy existent file into same folder, same name', async function (done) {
+    it('checking method : copy existent file into same folder, same name', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'copy existent file into same folder, same name',
         withRequest: {
@@ -871,7 +893,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('checking method : copy non existent file', async function (done) {
+    it('checking method : copy non existent file', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'copy non existent file',
         withRequest: {
@@ -909,7 +931,7 @@ fdescribe('Main: Currently testing files management,', function () {
       })
     })
 
-    fit('resolved the path of a file identified by its fileId', async function (done) {
+    it('resolved the path of a file identified by its fileId', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'PROPFIND path for fileId',
         withRequest: {
@@ -1010,9 +1032,9 @@ fdescribe('Main: Currently testing files management,', function () {
   })
 
   describe('TUS detection', function () {
-    var parseBodyStub
-    var xhr
-    var requests
+    let parseBodyStub
+    let xhr
+    let requests
 
     beforeAll(async function (done) {
       const promises = []
@@ -1040,7 +1062,7 @@ fdescribe('Main: Currently testing files management,', function () {
       xhr.restore()
     })
 
-    fit('returns TUS support information when TUS headers are set for a list call', function (done) {
+    it('returns TUS support information when TUS headers are set for a list call', function (done) {
       const promise = oc.files.list('')
       promise.then(entries => {
         const tusSupport = entries[0].getTusSupport()
@@ -1063,7 +1085,7 @@ fdescribe('Main: Currently testing files management,', function () {
         '<dummy></dummy>' // irrelevant parsing skipped with parseBodyStub
       )
     })
-    fit('returns TUS support information when TUS headers are set for a fileinfo call', function (done) {
+    it('returns TUS support information when TUS headers are set for a fileinfo call', function (done) {
       const promise = oc.files.fileInfo('somedir')
       promise.then(entry => {
         const tusSupport = entry.getTusSupport()
@@ -1084,7 +1106,7 @@ fdescribe('Main: Currently testing files management,', function () {
         '<dummy></dummy>' // irrelevant parsing skipped with parseBodyStub
       )
     })
-    fit('returns null when TUS headers are not set for a list call', function (done) {
+    it('returns null when TUS headers are not set for a list call', function (done) {
       const promise = oc.files.list('')
       promise.then(entries => {
         expect(entries[0].getTusSupport()).toEqual(null)
@@ -1123,7 +1145,7 @@ fdescribe('Main: Currently testing files management,', function () {
     })
 
     // conflicts with propfind with depth 1
-    fit('checking method : move existent file into same folder, different name', async function (done) {
+    it('checking method : move existent file into same folder, different name', async function (done) {
       await provider.addInteraction(aMoveRequest(
         'different name',
         {
@@ -1178,7 +1200,7 @@ fdescribe('Main: Currently testing files management,', function () {
       provider.removeInteractions().then(done, done.fail)
     })
     // skipped: add testFolder/中文123.txt and propfind
-    fit('checking method : copy existent file into same folder, different name', async function (done) {
+    it('checking method : copy existent file into same folder, different name', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'copy existent file into same folder, different name',
         withRequest: {
@@ -1220,7 +1242,7 @@ fdescribe('Main: Currently testing files management,', function () {
     })
 
     // skipped: add testFolder/中文123.txt and propfind
-    fit('checking method : copy existent file into different folder', async function (done) {
+    it('checking method : copy existent file into different folder', async function (done) {
       await provider.addInteraction({
         uponReceiving: 'list content of subdir1',
         withRequest: {
@@ -1458,7 +1480,7 @@ fdescribe('Main: Currently testing files management,', function () {
       provider.removeInteractions().then(done, done.fail)
     })
 
-    fit('checking method: favorite', function (done) {
+    it('checking method: favorite', function (done) {
       oc.files.putFileContents(config.testFile, testContent).then(status => {
         expect(typeof status).toBe('object')
         return oc.files.favorite(config.testFile)
@@ -1484,7 +1506,7 @@ fdescribe('Main: Currently testing files management,', function () {
     })
 
     // REPORT
-    fit('checking method: favorite filter', async function (done) {
+    it('checking method: favorite filter', async function (done) {
       // report method is not supported
       await provider.addInteraction({
         uponReceiving: 'get favorite file',
@@ -1550,7 +1572,7 @@ fdescribe('Main: Currently testing files management,', function () {
     })
 
     // REPORT method not implemented in pact.io
-    fit('searches in the instance', async function (done) {
+    it('searches in the instance', async function (done) {
       const davProperties = [
         '{http://owncloud.org/ns}favorite',
         '{DAV:}getcontentlength',
@@ -1626,7 +1648,7 @@ fdescribe('Main: Currently testing files management,', function () {
     })
 
     // REPORT is not supported by pact.io
-    fit('checking method: filter by tag', async function (done) {
+    it('checking method: filter by tag', async function (done) {
       const newFile = config.testFolder + '/' + config.testFile
       const newTagName = 'testSystemTag12345'
 
