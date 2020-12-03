@@ -78,7 +78,7 @@
     "webpack-node-externals": "^1.7.2"
   },
   "dependencies": {
-    "axios": "^0.19.2",
+    "axios": "^0.21.0",
     "browser-request": "^0.3.3",
     "davclient.js": "https://github.com/owncloud/davclient.js.git",
     "promise": "^8.0.3",
